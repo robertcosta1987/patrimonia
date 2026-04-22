@@ -2,7 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+let _openai: OpenAI | null = null
+function getOpenAI() {
+  if (!process.env.OPENAI_API_KEY) return null
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  return _openai
+}
 
 const SYSTEM_PROMPT = `Você é PatrimonIA, um copiloto educacional de investimentos para o mercado brasileiro.
 
@@ -63,7 +68,8 @@ export async function POST(request: NextRequest) {
     { role: 'user', content: message },
   ]
 
-  if (!process.env.OPENAI_API_KEY) {
+  const openai = getOpenAI()
+  if (!openai) {
     // Demo mode without OpenAI key
     const demoResponse = getDemoResponse(message)
     await saveMessages(supabase, user.id, session_id, message, demoResponse)
