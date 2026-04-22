@@ -81,10 +81,11 @@ export function ProfileWizard({ initialProfile, userId }: ProfileWizardProps) {
     setResult(profile)
 
     const supabase = createClient()
+    const { explanation: _explanation, ...profileToSave } = profile
     const { error } = await supabase.from('investor_profiles').upsert({
       user_id: userId,
       ...data,
-      ...profile,
+      ...profileToSave,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' })
 

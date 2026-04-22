@@ -89,8 +89,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: assistantMessage, session_id })
   } catch (err) {
     console.error('OpenAI error:', err)
-    const fallback = 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente em instantes.'
-    return NextResponse.json({ message: fallback }, { status: 200 })
+    const fallback = getDemoResponse(message)
+    await saveMessages(supabase, user.id, session_id, message, fallback)
+    return NextResponse.json({ message: fallback, session_id })
   }
 }
 
