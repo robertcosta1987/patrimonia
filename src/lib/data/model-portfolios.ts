@@ -1,0 +1,133 @@
+import { ModelPortfolio } from '@/types'
+
+export const MODEL_PORTFOLIOS: ModelPortfolio[] = [
+  {
+    id: 'conservador',
+    profile: 'conservador',
+    name: 'Carteira Conservadora',
+    description: 'Foco em preservação de capital e geração de renda com baixa volatilidade. Ideal para quem prioriza segurança e horizonte de curto a médio prazo.',
+    allocations: [
+      {
+        asset_class: 'renda_fixa',
+        percentage: 50,
+        label: 'Renda Fixa Bancária',
+        rationale: 'CDBs, LCIs e LCAs com proteção do FGC. Busca rentabilidade acima do CDI com baixíssimo risco.',
+        expected_characteristic: 'Segurança · Liquidez · Previsibilidade',
+      },
+      {
+        asset_class: 'tesouro',
+        percentage: 20,
+        label: 'Tesouro Direto',
+        rationale: 'Tesouro Selic e Tesouro IPCA+ de curto prazo. Máxima segurança com rentabilidade competitiva.',
+        expected_characteristic: 'Máxima segurança · Liquidez diária',
+      },
+      {
+        asset_class: 'fii',
+        percentage: 15,
+        label: 'FIIs de Papel',
+        rationale: 'FIIs que investem em títulos de crédito imobiliário (CRIs), com foco em renda mensal e menor volatilidade.',
+        expected_characteristic: 'Renda mensal · Baixa volatilidade',
+      },
+      {
+        asset_class: 'caixa',
+        percentage: 10,
+        label: 'Reserva de Liquidez',
+        rationale: 'Tesouro Selic ou CDB com liquidez diária para cobrir imprevistos e oportunidades.',
+        expected_characteristic: 'Disponibilidade imediata',
+      },
+      {
+        asset_class: 'acao',
+        percentage: 5,
+        label: 'Ações de Dividend',
+        rationale: 'Pequena exposição a ações de empresas sólidas com histórico de dividendos consistentes.',
+        expected_characteristic: 'Renda · Crescimento moderado',
+      },
+    ],
+  },
+  {
+    id: 'moderado',
+    profile: 'moderado',
+    name: 'Carteira Moderada',
+    description: 'Equilíbrio entre segurança e crescimento. Diversifica entre renda fixa, FIIs e ações para um retorno superior ao CDI no médio e longo prazo.',
+    allocations: [
+      {
+        asset_class: 'renda_fixa',
+        percentage: 30,
+        label: 'Renda Fixa',
+        rationale: 'Mix de Tesouro Direto, CDBs e debêntures de qualidade. Base de proteção da carteira.',
+        expected_characteristic: 'Estabilidade · Renda previsível',
+      },
+      {
+        asset_class: 'fii',
+        percentage: 25,
+        label: 'Fundos Imobiliários',
+        rationale: 'Diversificação entre FIIs de tijolo (shopping, logística, lajes) e papel para equilíbrio de risco e renda.',
+        expected_characteristic: 'Renda mensal · Proteção inflacionária',
+      },
+      {
+        asset_class: 'acao',
+        percentage: 25,
+        label: 'Ações',
+        rationale: 'Seleção de ações de qualidade em setores variados: bancos, energia, consumo e exportadores.',
+        expected_characteristic: 'Crescimento · Dividendos',
+      },
+      {
+        asset_class: 'tesouro',
+        percentage: 15,
+        label: 'Tesouro Direto',
+        rationale: 'Tesouro IPCA+ para proteção inflacionária de longo prazo e âncora da carteira.',
+        expected_characteristic: 'Proteção real · Longo prazo',
+      },
+      {
+        asset_class: 'caixa',
+        percentage: 5,
+        label: 'Reserva',
+        rationale: 'Reserva para oportunidades e manutenção de liquidez.',
+        expected_characteristic: 'Oportunidades · Liquidez',
+      },
+    ],
+  },
+  {
+    id: 'arrojado',
+    profile: 'arrojado',
+    name: 'Carteira Arrojada',
+    description: 'Foco em crescimento de capital no longo prazo com maior tolerância a oscilações. Para investidores com horizonte superior a 5 anos e experiência em renda variável.',
+    allocations: [
+      {
+        asset_class: 'acao',
+        percentage: 50,
+        label: 'Ações',
+        rationale: 'Carteira diversificada de ações com mix de growth, dividendos e exposição internacional via BDRs.',
+        expected_characteristic: 'Alto potencial de crescimento',
+      },
+      {
+        asset_class: 'fii',
+        percentage: 20,
+        label: 'Fundos Imobiliários',
+        rationale: 'FIIs de tijolo em segmentos de crescimento: logística, data centers, saúde e shopping premium.',
+        expected_characteristic: 'Renda + Valorização real',
+      },
+      {
+        asset_class: 'renda_fixa',
+        percentage: 15,
+        label: 'Renda Fixa / Crédito Privado',
+        rationale: 'Debêntures e CRIs de qualidade para diversificar risco e gerar renda adicional.',
+        expected_characteristic: 'Renda · Diversificação',
+      },
+      {
+        asset_class: 'tesouro',
+        percentage: 10,
+        label: 'Tesouro Direto',
+        rationale: 'Tesouro IPCA+ de longo prazo como reserva estratégica e proteção inflacionária.',
+        expected_characteristic: 'Proteção real garantida',
+      },
+      {
+        asset_class: 'caixa',
+        percentage: 5,
+        label: 'Caixa Tático',
+        rationale: 'Reserva para aproveitar oportunidades de mercado e manter liquidez mínima.',
+        expected_characteristic: 'Oportunidades táticas',
+      },
+    ],
+  },
+]
