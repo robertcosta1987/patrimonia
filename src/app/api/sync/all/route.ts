@@ -27,6 +27,13 @@ const BCB_SERIES_META: Record<number, { name: string; label: string; unit: strin
   21619: { name: 'euro',        label: 'Euro',          unit: 'R$' },
 }
 
+// BCB returns dates as DD/MM/YYYY — convert to YYYY-MM-DD for Postgres
+function bcbDateToIso(d: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+  const [day, month, year] = d.split('/')
+  return `${year}-${month}-${day}`
+}
+
 async function syncBcb(supabase: Awaited<ReturnType<typeof createServiceClient>>) {
   const result = await bcbProvider.fetchLatestIndicators()
   if (!result.data?.length) throw new Error('No BCB data')
@@ -38,13 +45,13 @@ async function syncBcb(supabase: Awaited<ReturnType<typeof createServiceClient>>
       label: BCB_SERIES_META[s.id].label,
       value: s.valor,
       unit: BCB_SERIES_META[s.id].unit,
-      reference_date: s.data,
+      reference_date: bcbDateToIso(s.data),
       source: result.is_mock ? 'mock' : 'bcb_sgs',
       fetched_at: new Date().toISOString(),
     }))
 
   const { error } = await supabase.from('macro_indicators').upsert(rows, { onConflict: 'name,reference_date' })
-  if (error) throw error
+  if (error) throw new Error(error.message ?? JSON.stringify(error))
   return { records: rows.length, is_mock: result.is_mock }
 }
 
@@ -128,7 +135,7 @@ async function run(req: NextRequest) {
       results[name] = { success: true, ...(await fn()) }
       await supabase.from('data_sync_runs').insert({ source_name: name, status: 'success', records_fetched: 0, records_inserted: 0, started_at: new Date(startedAt).toISOString(), finished_at: new Date().toISOString(), duration_ms: Date.now() - startedAt })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = err instanceof Error ? err.message : ((err as any)?.message ?? JSON.stringify(err))
       results[name] = { success: false, error: msg }
       hasErrors = true
       await supabase.from('data_sync_runs').insert({ source_name: name, status: 'error', records_fetched: 0, records_inserted: 0, error_message: msg, started_at: new Date(startedAt).toISOString(), finished_at: new Date().toISOString(), duration_ms: Date.now() - startedAt })
