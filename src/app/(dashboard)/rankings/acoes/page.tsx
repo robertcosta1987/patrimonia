@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Disclaimer } from '@/components/common/disclaimer'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScoreBadge } from '@/components/common/score-badge'
 import { TrendingUp, TrendingDown } from 'lucide-react'
@@ -21,24 +21,41 @@ function fmtCurrency(val: number | null | undefined) {
 export default async function AcoesRankingPage() {
   const supabase = await createClient()
 
-  const { data: metrics } = await supabase
-    .from('asset_metrics')
+  const { data: assets } = await supabase
+    .from('assets')
     .select(`
-      *,
-      assets!inner(id, ticker, name, sector, segment),
-      asset_prices(price, change_pct, source_timestamp)
+      id, ticker, name, sector,
+      asset_metrics(pl, pvp, dividend_yield, roe, debt_equity, revenue_growth, volatility, avg_volume, market_cap, score),
+      asset_prices(price, change_pct, ingested_at)
     `)
-    .eq('assets.asset_class', 'acao')
-    .order('score', { ascending: false })
+    .eq('asset_class', 'acao')
+    .eq('is_active', true)
 
-  const rows = (metrics ?? []).map(m => ({
-    ...m,
-    ticker: (m as any).assets?.ticker ?? '',
-    name: (m as any).assets?.name ?? '',
-    sector: (m as any).assets?.sector ?? '',
-    price: (m as any).asset_prices?.[0]?.price ?? null,
-    change_pct: (m as any).asset_prices?.[0]?.change_pct ?? null,
-  }))
+  const rows = (assets ?? [])
+    .map(a => {
+      const m = (a.asset_metrics as any)?.[0] ?? (a.asset_metrics as any) ?? {}
+      const prices: any[] = Array.isArray(a.asset_prices) ? a.asset_prices : []
+      const latest = prices.sort((x, y) => (y.ingested_at ?? '').localeCompare(x.ingested_at ?? ''))[0]
+      return {
+        id: a.id,
+        ticker: a.ticker,
+        name: a.name,
+        sector: a.sector,
+        pl: m.pl ?? null,
+        pvp: m.pvp ?? null,
+        dividend_yield: m.dividend_yield ?? null,
+        roe: m.roe ?? null,
+        debt_equity: m.debt_equity ?? null,
+        revenue_growth: m.revenue_growth ?? null,
+        volatility: m.volatility ?? null,
+        avg_volume: m.avg_volume ?? null,
+        market_cap: m.market_cap ?? null,
+        score: m.score ?? 0,
+        price: latest?.price ?? null,
+        change_pct: latest?.change_pct ?? null,
+      }
+    })
+    .sort((a, b) => b.score - a.score)
 
   return (
     <div className="space-y-5 max-w-full">
@@ -71,8 +88,15 @@ export default async function AcoesRankingPage() {
               </tr>
             </thead>
             <tbody>
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={11} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                    Nenhum dado disponível. Execute a sincronização para carregar os dados.
+                  </td>
+                </tr>
+              )}
               {rows.map((row, idx) => (
-                <tr key={row.asset_id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                <tr key={row.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3 text-muted-foreground font-medium">{idx + 1}</td>
                   <td className="px-4 py-3">
                     <div>
@@ -99,7 +123,7 @@ export default async function AcoesRankingPage() {
                   <td className="px-4 py-3 text-right font-mono text-muted-foreground">{fmt(row.volatility)}%</td>
                   <td className="px-4 py-3 text-right font-mono text-muted-foreground text-xs">{fmtCurrency(row.market_cap)}</td>
                   <td className="px-4 py-3 text-center">
-                    <ScoreBadge score={row.score ?? 0} />
+                    <ScoreBadge score={row.score} />
                   </td>
                 </tr>
               ))}

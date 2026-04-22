@@ -3,7 +3,7 @@ import { Disclaimer } from '@/components/common/disclaimer'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScoreBadge } from '@/components/common/score-badge'
-import { Briefcase, TrendingUp, TrendingDown } from 'lucide-react'
+import { Zap, TrendingUp, TrendingDown } from 'lucide-react'
 
 function fmt(val: number | null | undefined, decimals = 2, suffix = '') {
   if (val == null) return '—'
@@ -18,7 +18,7 @@ function fmtVolume(val: number | null | undefined) {
   return `R$ ${val.toFixed(0)}`
 }
 
-export default async function FiisRankingPage() {
+export default async function FiInfraRankingPage() {
   const supabase = await createClient()
 
   const { data: assets } = await supabase
@@ -28,7 +28,7 @@ export default async function FiisRankingPage() {
       asset_metrics(pvp, dividend_yield, vacancy_rate, avg_volume, net_worth, score),
       asset_prices(price, change_pct, ingested_at)
     `)
-    .eq('asset_class', 'fii')
+    .eq('asset_class', 'fi_infra')
     .eq('is_active', true)
 
   const rows = (assets ?? [])
@@ -43,7 +43,6 @@ export default async function FiisRankingPage() {
         segment: a.segment,
         pvp: m.pvp ?? null,
         dividend_yield: m.dividend_yield ?? null,
-        vacancy_rate: m.vacancy_rate ?? null,
         avg_volume: m.avg_volume ?? null,
         score: m.score ?? 0,
         price: latest?.price ?? null,
@@ -56,11 +55,11 @@ export default async function FiisRankingPage() {
     <div className="space-y-5 max-w-full">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Briefcase className="h-6 w-6 text-primary" />
-          Ranking de FIIs
+          <Zap className="h-6 w-6 text-primary" />
+          Ranking de FI-Infra
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Score educativo baseado em P/VP, dividend yield, vacância e liquidez.
+          Fundos de Infraestrutura — isenção de IR para pessoas físicas, lastreados em debêntures incentivadas.
         </p>
       </div>
 
@@ -76,7 +75,6 @@ export default async function FiisRankingPage() {
                 <th className="text-right px-4 py-3 font-medium text-muted-foreground">Variação</th>
                 <th className="text-right px-4 py-3 font-medium text-muted-foreground">P/VP</th>
                 <th className="text-right px-4 py-3 font-medium text-muted-foreground">DY</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">Vacância</th>
                 <th className="text-right px-4 py-3 font-medium text-muted-foreground">Liquidez/dia</th>
                 <th className="text-center px-4 py-3 font-medium text-muted-foreground">Score</th>
               </tr>
@@ -84,7 +82,7 @@ export default async function FiisRankingPage() {
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                  <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground text-sm">
                     Nenhum dado disponível. Execute a sincronização para carregar os dados.
                   </td>
                 </tr>
@@ -97,7 +95,7 @@ export default async function FiisRankingPage() {
                     <p className="text-xs text-muted-foreground">{row.name}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <Badge variant="secondary" className="text-xs">{row.segment ?? '—'}</Badge>
+                    <Badge variant="secondary" className="text-xs">{row.segment ?? 'Infraestrutura'}</Badge>
                   </td>
                   <td className="px-4 py-3 text-right font-mono">{row.price ? `R$ ${row.price.toFixed(2)}` : '—'}</td>
                   <td className="px-4 py-3 text-right">
@@ -117,9 +115,6 @@ export default async function FiisRankingPage() {
                   </td>
                   <td className="px-4 py-3 text-right font-mono">
                     {row.dividend_yield ? <span className="text-emerald-600 font-medium">{fmt(row.dividend_yield)}%</span> : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-muted-foreground">
-                    {row.vacancy_rate != null ? `${fmt(row.vacancy_rate, 1)}%` : '—'}
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-muted-foreground text-xs">{fmtVolume(row.avg_volume)}</td>
                   <td className="px-4 py-3 text-center"><ScoreBadge score={row.score} /></td>

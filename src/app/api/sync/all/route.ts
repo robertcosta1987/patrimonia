@@ -56,7 +56,7 @@ async function syncBcb(supabase: Awaited<ReturnType<typeof createServiceClient>>
 }
 
 async function syncB3(supabase: Awaited<ReturnType<typeof createServiceClient>>) {
-  const [acoes, fiis] = await Promise.all([b3Provider.fetchAcoes(), b3Provider.fetchFiis()])
+  const [acoes, fiis, fiInfra] = await Promise.all([b3Provider.fetchAcoes(), b3Provider.fetchFiis(), b3Provider.fetchFiInfra()])
   const now = new Date().toISOString()
   let inserted = 0
 
@@ -85,7 +85,15 @@ async function syncB3(supabase: Awaited<ReturnType<typeof createServiceClient>>)
     inserted++
   }
 
-  return { acoes: acoes.length, fiis: fiis.length, inserted }
+  for (const fi of fiInfra) {
+    const assetId = await upsertAsset(fi.ticker, fi.name, 'fi_infra', { segment: fi.segment ?? null, sector: null })
+    if (!assetId) continue
+    await supabase.from('asset_prices').insert({ asset_id: assetId, price: fi.price, change_pct: fi.change_pct, volume: fi.avg_volume, source: 'brapi', source_timestamp: now, ingested_at: now })
+    await supabase.from('asset_metrics').upsert({ asset_id: assetId, pvp: fi.pvp ?? null, dividend_yield: fi.dividend_yield ?? null, vacancy_rate: fi.vacancy_rate ?? null, avg_volume: fi.avg_volume ?? null, net_worth: fi.net_worth ?? null, score: calculateFiiScore(fi), updated_at: now }, { onConflict: 'asset_id' })
+    inserted++
+  }
+
+  return { acoes: acoes.length, fiis: fiis.length, fi_infra: fiInfra.length, inserted }
 }
 
 async function syncTesouro(supabase: Awaited<ReturnType<typeof createServiceClient>>) {

@@ -1,7 +1,7 @@
 import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { TrendingUp, Briefcase, Shield, Building, FileText, ArrowRight } from 'lucide-react'
+import { TrendingUp, Briefcase, Shield, Building, FileText, Zap, ArrowRight } from 'lucide-react'
 
 const RANKING_CATEGORIES = [
   {
@@ -21,6 +21,15 @@ const RANKING_CATEGORIES = [
     badge: '12 ativos',
     color: 'bg-emerald-50 border-emerald-200',
     iconColor: 'text-emerald-500',
+  },
+  {
+    href: '/rankings/fi-infra',
+    icon: Zap,
+    label: 'FI-Infra',
+    desc: 'Fundos de Infraestrutura com isenção de IR para pessoa física',
+    badge: '8 ativos',
+    color: 'bg-cyan-50 border-cyan-200',
+    iconColor: 'text-cyan-500',
   },
   {
     href: '/rankings/tesouro',

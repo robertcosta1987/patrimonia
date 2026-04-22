@@ -50,6 +50,17 @@ export const MOCK_FIIS: FiiMetrics[] = [
   { asset_id: '32', ticker: 'RECR11', name: 'REC Recebíveis Imobiliários', segment: 'Papel', price: 94.12, change_pct: 0.5, pvp: 0.95, dividend_yield: 13.1, vacancy_rate: 0, avg_volume: 3500000, net_worth: 1800000000, score: 82, updated_at: new Date().toISOString() },
 ]
 
+export const MOCK_FI_INFRA: FiiMetrics[] = [
+  { asset_id: '41', ticker: 'KDIF11', name: 'Kinea Infra FII', segment: 'Infraestrutura', price: 112.84, change_pct: 0.3, pvp: 0.98, dividend_yield: 13.8, vacancy_rate: 0, avg_volume: 9800000, net_worth: 8200000000, score: 86, updated_at: new Date().toISOString() },
+  { asset_id: '42', ticker: 'CPFF11', name: 'Capitânia Premium FII', segment: 'Infraestrutura', price: 88.42, change_pct: 0.1, pvp: 0.97, dividend_yield: 14.2, vacancy_rate: 0, avg_volume: 4200000, net_worth: 2100000000, score: 85, updated_at: new Date().toISOString() },
+  { asset_id: '43', ticker: 'VGHF11', name: 'Vinci Hedge Fund FII', segment: 'Infraestrutura', price: 10.14, change_pct: -0.2, pvp: 0.94, dividend_yield: 12.4, vacancy_rate: 0, avg_volume: 6300000, net_worth: 3800000000, score: 81, updated_at: new Date().toISOString() },
+  { asset_id: '44', ticker: 'RZAK11', name: 'Riza Akin FII', segment: 'Infraestrutura', price: 97.88, change_pct: 0.5, pvp: 0.96, dividend_yield: 14.8, vacancy_rate: 0, avg_volume: 2100000, net_worth: 900000000, score: 84, updated_at: new Date().toISOString() },
+  { asset_id: '45', ticker: 'HABT11', name: 'Habitasec FII', segment: 'Infraestrutura', price: 9.92, change_pct: 0.0, pvp: 0.99, dividend_yield: 13.1, vacancy_rate: 0, avg_volume: 3500000, net_worth: 1600000000, score: 82, updated_at: new Date().toISOString() },
+  { asset_id: '46', ticker: 'MFII11', name: 'Mérito Desenvolvimentos FII', segment: 'Infraestrutura', price: 94.22, change_pct: 0.7, pvp: 0.92, dividend_yield: 15.2, vacancy_rate: 0, avg_volume: 1800000, net_worth: 700000000, score: 83, updated_at: new Date().toISOString() },
+  { asset_id: '47', ticker: 'NVHO11', name: 'Novii FII', segment: 'Infraestrutura', price: 100.44, change_pct: -0.4, pvp: 0.95, dividend_yield: 13.5, vacancy_rate: 0, avg_volume: 2800000, net_worth: 1200000000, score: 80, updated_at: new Date().toISOString() },
+  { asset_id: '48', ticker: 'JURO11', name: 'Sparta Infra FII', segment: 'Infraestrutura', price: 98.12, change_pct: 0.2, pvp: 1.01, dividend_yield: 12.8, vacancy_rate: 0, avg_volume: 1500000, net_worth: 600000000, score: 78, updated_at: new Date().toISOString() },
+]
+
 export class B3Provider extends BaseProvider {
   constructor() {
     super({
@@ -122,6 +133,30 @@ export class B3Provider extends BaseProvider {
       })
     } catch {
       return MOCK_FIIS
+    }
+  }
+
+  async fetchFiInfra(): Promise<FiiMetrics[]> {
+    try {
+      const tickers = MOCK_FI_INFRA.map(f => f.ticker)
+      const quotes = await this.fetchBrapiQuotes(tickers)
+      if (quotes.size === 0) return MOCK_FI_INFRA
+
+      return MOCK_FI_INFRA.map(mock => {
+        const real = quotes.get(mock.ticker)
+        if (!real) return mock
+        return {
+          ...mock,
+          price: real.regularMarketPrice,
+          change_pct: real.regularMarketChangePercent,
+          pvp: real.priceToBook ?? mock.pvp,
+          dividend_yield: real.dividendYield ?? mock.dividend_yield,
+          avg_volume: real.regularMarketVolume ?? mock.avg_volume,
+          updated_at: new Date().toISOString(),
+        }
+      })
+    } catch {
+      return MOCK_FI_INFRA
     }
   }
 
