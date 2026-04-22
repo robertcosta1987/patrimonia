@@ -1,6 +1,22 @@
 import { BaseProvider, FetchResult } from './base'
 import { AcaoMetrics, FiiMetrics } from '@/types'
 
+interface BrapiQuote {
+  symbol: string
+  shortName: string
+  regularMarketPrice: number
+  regularMarketChangePercent: number
+  regularMarketVolume?: number
+  marketCap?: number
+  priceEarnings?: number
+  priceToBook?: number
+  dividendYield?: number
+}
+
+interface BrapiResponse {
+  results: BrapiQuote[]
+}
+
 export const MOCK_ACOES: AcaoMetrics[] = [
   { asset_id: '1', ticker: 'PETR4', name: 'Petrobras PN', price: 37.42, change_pct: 1.2, pl: 4.1, pvp: 1.1, dividend_yield: 14.2, roe: 28.4, debt_equity: 0.6, revenue_growth: 12.1, volatility: 28.5, avg_volume: 180000000, market_cap: 487000000000, score: 82, updated_at: new Date().toISOString() },
   { asset_id: '2', ticker: 'VALE3', name: 'Vale ON', price: 58.12, change_pct: -0.8, pl: 5.8, pvp: 1.4, dividend_yield: 9.8, roe: 24.1, debt_equity: 0.4, revenue_growth: -2.3, volatility: 31.2, avg_volume: 220000000, market_cap: 281000000000, score: 75, updated_at: new Date().toISOString() },
@@ -38,21 +54,92 @@ export class B3Provider extends BaseProvider {
   constructor() {
     super({
       name: 'b3',
-      baseUrl: process.env.B3_API_BASE_URL ?? 'https://query1.finance.yahoo.com',
-      timeout: 10000,
+      baseUrl: 'https://brapi.dev',
+      timeout: 15000,
     })
   }
 
-  async fetchAcoes(): Promise<FiiMetrics[] | AcaoMetrics[]> {
-    return MOCK_ACOES
+  private async fetchBrapiQuotes(tickers: string[]): Promise<Map<string, BrapiQuote>> {
+    const token = process.env.BRAPI_TOKEN ?? 'demo'
+    const symbols = tickers.join(',')
+    const result = await this.fetchJson<BrapiResponse>(
+      `/api/quote/${symbols}?token=${token}&fundamental=true`
+    )
+
+    const map = new Map<string, BrapiQuote>()
+    if (result.data?.results) {
+      for (const q of result.data.results) {
+        map.set(q.symbol, q)
+      }
+    }
+    return map
+  }
+
+  async fetchAcoes(): Promise<AcaoMetrics[]> {
+    try {
+      const tickers = MOCK_ACOES.map(a => a.ticker)
+      const quotes = await this.fetchBrapiQuotes(tickers)
+      if (quotes.size === 0) return MOCK_ACOES
+
+      return MOCK_ACOES.map(mock => {
+        const real = quotes.get(mock.ticker)
+        if (!real) return mock
+        return {
+          ...mock,
+          price: real.regularMarketPrice,
+          change_pct: real.regularMarketChangePercent,
+          pl: real.priceEarnings ?? mock.pl,
+          pvp: real.priceToBook ?? mock.pvp,
+          dividend_yield: real.dividendYield ?? mock.dividend_yield,
+          market_cap: real.marketCap ?? mock.market_cap,
+          avg_volume: real.regularMarketVolume ?? mock.avg_volume,
+          updated_at: new Date().toISOString(),
+        }
+      })
+    } catch {
+      return MOCK_ACOES
+    }
   }
 
   async fetchFiis(): Promise<FiiMetrics[]> {
-    return MOCK_FIIS
+    try {
+      const tickers = MOCK_FIIS.map(f => f.ticker)
+      const quotes = await this.fetchBrapiQuotes(tickers)
+      if (quotes.size === 0) return MOCK_FIIS
+
+      return MOCK_FIIS.map(mock => {
+        const real = quotes.get(mock.ticker)
+        if (!real) return mock
+        return {
+          ...mock,
+          price: real.regularMarketPrice,
+          change_pct: real.regularMarketChangePercent,
+          pvp: real.priceToBook ?? mock.pvp,
+          dividend_yield: real.dividendYield ?? mock.dividend_yield,
+          avg_volume: real.regularMarketVolume ?? mock.avg_volume,
+          updated_at: new Date().toISOString(),
+        }
+      })
+    } catch {
+      return MOCK_FIIS
+    }
+  }
+
+  async fetchRealResult(): Promise<FetchResult<{ acoes: AcaoMetrics[]; fiis: FiiMetrics[] }>> {
+    const [acoes, fiis] = await Promise.all([this.fetchAcoes(), this.fetchFiis()])
+    const isReal = acoes[0]?.price !== MOCK_ACOES[0]?.price
+    return {
+      data: { acoes, fiis },
+      error: null,
+      source: isReal ? 'brapi' : 'mock',
+      fetched_at: new Date().toISOString(),
+      is_mock: !isReal,
+    }
   }
 
   async healthCheck(): Promise<boolean> {
-    return true
+    const quotes = await this.fetchBrapiQuotes(['PETR4'])
+    return quotes.size > 0
   }
 }
 
