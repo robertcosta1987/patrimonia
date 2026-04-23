@@ -79,11 +79,11 @@ export default function RankingsPage() {
                   <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm`}>
                     <cat.icon className={`h-5 w-5 ${cat.iconColor}`} />
                   </div>
-                  <Badge variant="secondary" className="text-xs">{cat.badge}</Badge>
+                  <Badge variant="secondary" className="text-xs text-gray-700">{cat.badge}</Badge>
                 </div>
-                <h3 className="font-semibold text-sm">{cat.label}</h3>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{cat.desc}</p>
-                <div className="flex items-center gap-1 mt-3 text-xs text-primary font-medium">
+                <h3 className="font-semibold text-sm text-gray-900">{cat.label}</h3>
+                <p className="text-xs text-gray-500 mt-1 leading-relaxed">{cat.desc}</p>
+                <div className="flex items-center gap-1 mt-3 text-xs font-medium text-gray-700">
                   Ver ranking <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
                 </div>
               </CardContent>
