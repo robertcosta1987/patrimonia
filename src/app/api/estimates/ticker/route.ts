@@ -4,6 +4,15 @@ import Anthropic from '@anthropic-ai/sdk'
 
 export const maxDuration = 60
 
+function extractJSON(raw: string): string {
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]+?)\s*```/)
+  if (fenced) return fenced[1].trim()
+  const start = raw.indexOf('{')
+  const end = raw.lastIndexOf('}')
+  if (start !== -1 && end > start) return raw.slice(start, end + 1)
+  return raw.trim()
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -106,8 +115,9 @@ REGRAS:
 
   const text = response.content[0]?.type === 'text' ? response.content[0].text : ''
 
+  const extracted = extractJSON(text)
   try {
-    const result = JSON.parse(text.trim())
+    const result = JSON.parse(extracted)
     return NextResponse.json(result)
   } catch {
     console.error('[ticker-estimate] JSON parse error, raw:', text.slice(0, 500))

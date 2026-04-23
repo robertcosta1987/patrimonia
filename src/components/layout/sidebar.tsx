@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, User, BarChart3, TrendingUp, Calculator,
   BookOpen, MessageSquare, Bell, LineChart, Settings, ChevronRight,
-  Briefcase, LogOut, ShieldCheck, Activity, Sparkles
+  Briefcase, LogOut, ShieldCheck, Activity, Sparkles, SlidersHorizontal
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -24,6 +24,7 @@ const NAV_ITEMS = [
     label: 'Análise',
     items: [
       { href: '/rankings', icon: BarChart3, label: 'Rankings' },
+      { href: '/screener', icon: SlidersHorizontal, label: 'Screener B3' },
       { href: '/carteira', icon: Briefcase, label: 'Carteira-Modelo' },
       { href: '/carteira-hipotetica', icon: Sparkles, label: 'Carteira Hipotética' },
       { href: '/estimativas', icon: LineChart, label: 'Estimativas' },
