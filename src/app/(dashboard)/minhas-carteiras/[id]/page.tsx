@@ -87,14 +87,14 @@ export default function CarteiraDetailPage() {
     load()
   }, [id])
 
-  async function generateProjections() {
+  async function generateProjections(force = false) {
     setProjecting(true)
     setProjError(null)
     try {
       const res = await fetch('/api/portfolio/project', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ portfolioId: id }),
+        body: JSON.stringify({ portfolioId: id, force }),
       })
       const data = await res.json()
       if (data.error) setProjError(data.error)
@@ -317,7 +317,7 @@ export default function CarteiraDetailPage() {
                 <p className="text-xs text-muted-foreground mb-4">
                   A IA irá projetar cada ativo da carteira mês a mês pelos próximos 12 meses.
                 </p>
-                <Button onClick={generateProjections} disabled={projecting} className="gap-2">
+                <Button onClick={() => generateProjections()} disabled={projecting} className="gap-2">
                   {projecting ? <><RefreshCw className="h-4 w-4 animate-spin" /> Projetando…</> : <><BarChart3 className="h-4 w-4" /> Gerar Projeções com IA</>}
                 </Button>
               </CardContent>
@@ -465,7 +465,7 @@ export default function CarteiraDetailPage() {
                 </CardContent>
               </Card>
 
-              <Button variant="outline" size="sm" onClick={generateProjections} disabled={projecting} className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => generateProjections(true)} disabled={projecting} className="gap-2">
                 {projecting ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Recalculando…</> : <><RefreshCw className="h-3.5 w-3.5" /> Recalcular projeções</>}
               </Button>
             </>
