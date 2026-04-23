@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
 import { Disclaimer } from '@/components/common/disclaimer'
 import { MessageSquare, Send, Loader2, Bot, User, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -15,13 +14,150 @@ interface Message {
 }
 
 const SUGGESTIONS = [
-  'Explique o que é IPCA+ de forma simples',
+  'Compare CDB 120% CDI vs Tesouro IPCA+ 2035',
   'Qual a diferença entre CDB e LCI?',
-  'Como funciona um FII de papel?',
+  'Monte uma carteira para perfil moderado',
   'Simule investir R$ 1.000/mês por 10 anos',
-  'Explique marcação a mercado',
-  'Quais os riscos de debêntures?',
+  'Explique marcação a mercado com exemplos',
+  'Quais os riscos de debêntures incentivadas?',
 ]
+
+function renderInline(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+?\*\*|\*[^*]+?\*|`[^`]+?`)/g)
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**'))
+          return <strong key={i}>{part.slice(2, -2)}</strong>
+        if (part.startsWith('*') && part.endsWith('*'))
+          return <em key={i}>{part.slice(1, -1)}</em>
+        if (part.startsWith('`') && part.endsWith('`'))
+          return <code key={i} className="bg-black/10 px-1 rounded text-[11px] font-mono">{part.slice(1, -1)}</code>
+        return <span key={i}>{part}</span>
+      })}
+    </>
+  )
+}
+
+function isTableSeparator(line: string) {
+  return /^\|[\s|:\-]+\|$/.test(line.trim())
+}
+
+function MarkdownContent({ content }: { content: string }) {
+  const lines = content.split('\n')
+  const elements: React.ReactNode[] = []
+  let i = 0
+  let key = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // Headings
+    const headingMatch = line.match(/^(#{1,3})\s+(.+)/)
+    if (headingMatch) {
+      const level = headingMatch[1].length
+      const text = headingMatch[2]
+      const cls =
+        level === 1
+          ? 'font-bold text-base mt-3 mb-1'
+          : level === 2
+          ? 'font-bold text-sm mt-2 mb-0.5'
+          : 'font-semibold text-sm mt-1'
+      elements.push(<div key={key++} className={cls}>{renderInline(text)}</div>)
+      i++
+      continue
+    }
+
+    // Table
+    if (line.startsWith('|') && !isTableSeparator(line)) {
+      const tableLines: string[] = []
+      while (i < lines.length && lines[i].startsWith('|')) {
+        if (!isTableSeparator(lines[i])) tableLines.push(lines[i])
+        i++
+      }
+      if (tableLines.length > 0) {
+        const parseRow = (row: string) =>
+          row.split('|').slice(1, -1).map(c => c.trim())
+        const headers = parseRow(tableLines[0])
+        const rows = tableLines.slice(1).map(parseRow)
+        elements.push(
+          <div key={key++} className="overflow-x-auto my-2 rounded border border-current/15">
+            <table className="text-xs w-full border-collapse min-w-[260px]">
+              <thead>
+                <tr className="bg-black/5">
+                  {headers.map((h, j) => (
+                    <th key={j} className="text-left py-1.5 px-2 font-semibold border-b border-current/15 whitespace-nowrap">
+                      {renderInline(h)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, j) => (
+                  <tr key={j} className="border-b border-current/10 last:border-0 even:bg-black/[0.03]">
+                    {row.map((cell, k) => (
+                      <td key={k} className="py-1.5 px-2">{renderInline(cell)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+      continue
+    }
+
+    // Bullet list
+    if (/^[-*•]\s/.test(line)) {
+      const items: string[] = []
+      while (i < lines.length && /^[-*•]\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^[-*•]\s/, ''))
+        i++
+      }
+      elements.push(
+        <ul key={key++} className="list-disc list-outside ml-4 space-y-0.5 my-1">
+          {items.map((item, j) => <li key={j}>{renderInline(item)}</li>)}
+        </ul>
+      )
+      continue
+    }
+
+    // Numbered list
+    if (/^\d+\.\s/.test(line)) {
+      const items: string[] = []
+      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^\d+\.\s/, ''))
+        i++
+      }
+      elements.push(
+        <ol key={key++} className="list-decimal list-outside ml-4 space-y-0.5 my-1">
+          {items.map((item, j) => <li key={j}>{renderInline(item)}</li>)}
+        </ol>
+      )
+      continue
+    }
+
+    // Horizontal rule
+    if (/^---+$/.test(line.trim())) {
+      elements.push(<hr key={key++} className="border-current/20 my-2" />)
+      i++
+      continue
+    }
+
+    // Empty line - small spacer
+    if (!line.trim()) {
+      i++
+      continue
+    }
+
+    // Regular paragraph
+    elements.push(<p key={key++} className="leading-relaxed">{renderInline(line)}</p>)
+    i++
+  }
+
+  return <div className="space-y-1 text-sm">{elements}</div>
+}
 
 function MessageBubble({ msg }: { msg: Message }) {
   const isUser = msg.role === 'user'
@@ -34,17 +170,12 @@ function MessageBubble({ msg }: { msg: Message }) {
         {isUser ? <User className="h-4 w-4 text-white" /> : <Bot className="h-4 w-4 text-muted-foreground" />}
       </div>
       <div className={cn(
-        'max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed',
+        'max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-relaxed',
         isUser
           ? 'bg-primary text-primary-foreground rounded-tr-sm'
           : 'bg-muted text-foreground rounded-tl-sm'
       )}>
-        {msg.content.split('\n').map((line, i) => (
-          <span key={i}>
-            {line.replace(/\*\*(.*?)\*\*/g, (_, t) => t)}
-            {i < msg.content.split('\n').length - 1 && <br />}
-          </span>
-        ))}
+        <MarkdownContent content={msg.content} />
       </div>
     </div>
   )
@@ -54,7 +185,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: 'Olá! Sou o PatrimonIA, seu copiloto educacional de investimentos no mercado brasileiro. Como posso ajudar hoje?',
+      content: 'Olá! Sou o **PatrimonIA**, seu copiloto educacional de investimentos no mercado brasileiro. 📊\n\nPosso ajudar com:\n- Comparações entre ativos (com tabelas detalhadas)\n- Simulações e projeções de retorno\n- Análise de FIIs, ações, renda fixa e Tesouro Direto\n- Carteiras-modelo educativas por perfil\n\nComo posso ajudar hoje?',
     },
   ])
   const [input, setInput] = useState('')
@@ -118,7 +249,7 @@ export default function ChatPage() {
 
       <Card className="overflow-hidden">
         {/* Messages */}
-        <div className="h-[480px] overflow-y-auto p-4 space-y-4">
+        <div className="h-[500px] overflow-y-auto p-4 space-y-4">
           {messages.map((msg, i) => (
             <MessageBubble key={i} msg={msg} />
           ))}
