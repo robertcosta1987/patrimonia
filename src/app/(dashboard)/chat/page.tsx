@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Disclaimer } from '@/components/common/disclaimer'
-import { MessageSquare, Send, Loader2, Bot, User, Sparkles } from 'lucide-react'
+import { MessageSquare, Send, Loader2, Bot, User, Sparkles, Database } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Message {
@@ -14,9 +14,9 @@ interface Message {
 }
 
 const SUGGESTIONS = [
+  'Monte uma carteira hipotética para meu perfil',
+  'Quais FIIs têm DY acima de 10% e P/VP abaixo de 1?',
   'Compare CDB 120% CDI vs Tesouro IPCA+ 2035',
-  'Qual a diferença entre CDB e LCI?',
-  'Monte uma carteira para perfil moderado',
   'Simule investir R$ 1.000/mês por 10 anos',
   'Explique marcação a mercado com exemplos',
   'Quais os riscos de debêntures incentivadas?',
@@ -190,6 +190,7 @@ export default function ChatPage() {
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingMsg, setLoadingMsg] = useState('')
   const [sessionId, setSessionId] = useState<string | undefined>()
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -204,6 +205,8 @@ export default function ChatPage() {
     setInput('')
     setMessages(prev => [...prev, { role: 'user', content: message }])
     setLoading(true)
+    const isPortfolioRequest = /carteira|portf|sugir|recomen|screener|invest|monte|montar|ativo|ação|fii|fi.infra/i.test(message)
+    setLoadingMsg(isPortfolioRequest ? '🔍 Consultando base de dados e analisando ativos…' : '')
 
     try {
       const res = await fetch('/api/chat', {
@@ -225,6 +228,7 @@ export default function ChatPage() {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Falha na conexão. Verifique sua internet e tente novamente.' }])
     } finally {
       setLoading(false)
+      setLoadingMsg('')
     }
   }
 
@@ -258,10 +262,19 @@ export default function ChatPage() {
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
                 <Bot className="h-4 w-4 text-muted-foreground" />
               </div>
-              <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: '300ms' }} />
+              <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2">
+                {loadingMsg ? (
+                  <>
+                    <Database className="h-3.5 w-3.5 text-primary animate-pulse shrink-0" />
+                    <span className="text-xs text-muted-foreground">{loadingMsg}</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </>
+                )}
               </div>
             </div>
           )}

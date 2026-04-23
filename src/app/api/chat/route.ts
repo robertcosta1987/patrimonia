@@ -12,6 +12,124 @@ function getClient(): Anthropic | null {
   return _client
 }
 
+// ─── Tool definitions ─────────────────────────────────────────────
+
+const TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'screen_assets',
+    description: `Query the live PatrimonIA database to screen Brazilian market assets (ações, FIIs, FI-Infra) by fundamental metrics.
+Returns real asset data with metrics like P/L, P/VP, DY, ROE, volatility, score, price.
+
+ALWAYS call this tool when:
+- User asks for a portfolio recommendation ("monte uma carteira", "me sugira ativos", "carteira hipotética", "quais FIIs comprar")
+- User wants assets matching specific criteria ("FIIs com DY acima de 10%", "ações com P/L baixo")
+- User asks what the best assets are for their profile
+- You need real market data to support your analysis
+
+Call it multiple times with different asset_class values to build a diversified portfolio.`,
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        asset_class: {
+          type: 'string',
+          enum: ['all', 'acao', 'fii', 'fi_infra'],
+          description: 'Filter by asset class. Use "all" for a broad screen.',
+        },
+        min_score: {
+          type: 'number',
+          description: 'Minimum quality score (0-100). 70+ = good quality.',
+        },
+        min_dy: {
+          type: 'number',
+          description: 'Minimum dividend yield (%). E.g. 8 means DY ≥ 8%.',
+        },
+        max_pl: {
+          type: 'number',
+          description: 'Maximum P/L ratio. Null = no filter.',
+        },
+        max_pvp: {
+          type: 'number',
+          description: 'Maximum P/VP ratio. Values < 1 are often attractive.',
+        },
+        min_roe: {
+          type: 'number',
+          description: 'Minimum ROE (%). E.g. 15 means ROE ≥ 15%.',
+        },
+        max_volatility: {
+          type: 'number',
+          description: 'Maximum annual volatility (%). E.g. 25 = max 25% vol.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Max results (default 20, max 40).',
+        },
+      },
+      required: [],
+    },
+  },
+]
+
+// ─── Screener tool executor ───────────────────────────────────────
+
+async function executeScreener(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  input: {
+    asset_class?: string
+    min_score?: number
+    min_dy?: number
+    max_pl?: number
+    max_pvp?: number
+    min_roe?: number
+    max_volatility?: number
+    limit?: number
+  }
+) {
+  const { data: assets } = await supabase
+    .from('assets')
+    .select(`
+      ticker, name, asset_class, sector, segment,
+      asset_metrics(pl, pvp, dividend_yield, roe, volatility, avg_volume, market_cap, score),
+      asset_prices(price, change_pct, ingested_at)
+    `)
+    .eq('is_active', true)
+
+  let rows = (assets ?? []).map(a => {
+    const m = (a.asset_metrics as any)?.[0] ?? (a.asset_metrics as any) ?? {}
+    const prices: any[] = Array.isArray(a.asset_prices) ? a.asset_prices : []
+    const latest = prices.sort((x, y) => (y.ingested_at ?? '').localeCompare(x.ingested_at ?? ''))[0]
+    return {
+      ticker: a.ticker, name: a.name, asset_class: a.asset_class,
+      sector: a.sector ?? null, segment: a.segment ?? null,
+      pl: m.pl ?? null, pvp: m.pvp ?? null,
+      dividend_yield: m.dividend_yield ?? null, roe: m.roe ?? null,
+      volatility: m.volatility ?? null, avg_volume: m.avg_volume ?? null,
+      market_cap: m.market_cap ?? null, score: m.score ?? 0,
+      price: latest?.price ?? null, change_pct: latest?.change_pct ?? null,
+    }
+  })
+
+  if (input.asset_class && input.asset_class !== 'all')
+    rows = rows.filter(r => r.asset_class === input.asset_class)
+  if (input.min_score != null)
+    rows = rows.filter(r => r.score >= input.min_score!)
+  if (input.min_dy != null)
+    rows = rows.filter(r => r.dividend_yield != null && r.dividend_yield >= input.min_dy!)
+  if (input.max_pl != null)
+    rows = rows.filter(r => r.pl == null || r.pl <= input.max_pl!)
+  if (input.max_pvp != null)
+    rows = rows.filter(r => r.pvp == null || r.pvp <= input.max_pvp!)
+  if (input.min_roe != null)
+    rows = rows.filter(r => r.roe != null && r.roe >= input.min_roe!)
+  if (input.max_volatility != null)
+    rows = rows.filter(r => r.volatility == null || r.volatility <= input.max_volatility!)
+
+  rows = rows.sort((a, b) => b.score - a.score).slice(0, Math.min(input.limit ?? 20, 40))
+
+  return { total_found: rows.length, filters_applied: input, assets: rows }
+}
+
+// ─── System prompt ────────────────────────────────────────────────
+
 const SYSTEM_PROMPT = `You are **PatrimonIA**, an elite AI investment intelligence agent specialized in the **Brazilian financial market**.
 
 Your role is to help users understand, compare, simulate, and explore investments in Brazil with **deep, professional-grade, data-driven analysis**, while maintaining a clear educational positioning.
@@ -62,6 +180,30 @@ You should excel at: compound interest calculations, aporte simulations, gross v
 
 Always label estimates explicitly: "estimativa", "simulação", "cenário ilustrativo", "projeção com base nas premissas informadas". State assumptions clearly. Never guarantee future performance.
 
+## Screener tool — use it for portfolio requests
+
+You have the **screen_assets** tool which queries the live PatrimonIA database of real Brazilian market assets.
+
+**Call screen_assets when the user asks for:**
+- A portfolio or carteira hipotética
+- Specific asset recommendations ("melhores FIIs", "ações com bom DY")
+- Screened lists meeting any fundamental criteria
+
+**Portfolio building workflow (mandatory when asked for a portfolio):**
+1. Call screen_assets for each relevant asset class (ações, FIIs, FI-Infra, etc.) with filters appropriate for the user's profile
+2. Analyze the REAL data returned — P/L, P/VP, DY, ROE, volatility, score
+3. Select the best 6-10 assets from the results
+4. Present a markdown table: | Ticker | Nome | Classe | % | DY | P/VP | Score | Racional |
+5. Show total allocation summing to 100%
+6. Add a 3-scenario return projection (pessimista/base/otimista) as a table
+7. Explain why each asset was chosen citing its real metric values
+8. Never invent asset data — use only what the screener returns
+
+**Typical filter strategies:**
+- Perfil conservador: min_score=70, max_volatility=20, focus on fii and fi_infra with min_dy=9
+- Perfil moderado: min_score=65, mix of acao + fii + fi_infra
+- Perfil arrojado: focus on acao with min_roe=15, allow higher volatility
+
 ## Portfolio suggestions
 
 Frame all portfolio suggestions as educational models: "carteira-modelo educativa", "alocação teórica", "exemplo analítico". Explain rationale, discuss tradeoffs, mention risk exposure.
@@ -93,9 +235,11 @@ Make every response visually structured and easy to scan:
 
 * Never answer in English
 * Never omit the educational disclaimer
-* Never fabricate live market data — if current data is unavailable, say so and use clearly labeled assumptions
+* Never fabricate live market data — always call screen_assets for real data when building portfolios
 * Never promise returns or present yourself as a licensed human professional
 * Never produce shallow generic filler for serious analytical questions`
+
+// ─── POST handler ────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -116,7 +260,6 @@ export async function POST(request: NextRequest) {
     : ''
 
   const client = getClient()
-
   if (!client) {
     console.error('[chat] ANTHROPIC_API_KEY not set')
     return NextResponse.json({
@@ -126,8 +269,8 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  const anthropicMessages: Anthropic.MessageParam[] = [
-    ...(history ?? []).slice(-12).map((m: { role: string; content: string }) => ({
+  let messages: Anthropic.MessageParam[] = [
+    ...(history ?? []).slice(-10).map((m: { role: string; content: string }) => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
     })),
@@ -135,28 +278,76 @@ export async function POST(request: NextRequest) {
   ]
 
   try {
-    console.log('[chat] calling claude-haiku-4-5, user=', user.id)
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1200,
-      system: SYSTEM_PROMPT + profileContext,
-      messages: anthropicMessages,
-    })
+    console.log('[chat] user=', user.id, 'msg=', message.slice(0, 60))
+    let finalText = ''
+    let toolCallCount = 0
+    const MAX_TOOL_CALLS = 3
 
-    const assistantMessage = response.content[0]?.type === 'text'
-      ? response.content[0].text
-      : 'Não consegui gerar uma resposta.'
+    // Agentic loop: handle up to MAX_TOOL_CALLS tool calls
+    while (true) {
+      const response = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 3000,
+        system: SYSTEM_PROMPT + profileContext,
+        messages,
+        tools: TOOLS,
+      })
 
-    console.log('[chat] success, input_tokens=', response.usage.input_tokens, 'output_tokens=', response.usage.output_tokens)
-    await saveMessages(supabase, user.id, session_id, message, assistantMessage)
-    return NextResponse.json({ message: assistantMessage, session_id, _mode: 'claude' })
+      console.log('[chat] stop_reason=', response.stop_reason, 'tokens=', response.usage.output_tokens)
+
+      const hasToolUse = response.content.some(b => b.type === 'tool_use')
+
+      if (!hasToolUse || toolCallCount >= MAX_TOOL_CALLS) {
+        // Extract final text (may have both text + tool_use blocks; take all text)
+        finalText = response.content
+          .filter(b => b.type === 'text')
+          .map(b => (b as Anthropic.TextBlock).text)
+          .join('\n\n')
+
+        if (!finalText) finalText = 'Não consegui gerar uma resposta. Tente novamente.'
+        break
+      }
+
+      // Execute tool calls
+      const toolUseBlocks = response.content.filter(b => b.type === 'tool_use') as Anthropic.ToolUseBlock[]
+      const toolResults: Anthropic.ToolResultBlockParam[] = []
+
+      for (const toolUse of toolUseBlocks) {
+        toolCallCount++
+        console.log('[chat] tool_call=', toolUse.name, 'input=', JSON.stringify(toolUse.input).slice(0, 120))
+
+        let result: object
+        if (toolUse.name === 'screen_assets') {
+          result = await executeScreener(supabase, toolUse.input as Parameters<typeof executeScreener>[1])
+        } else {
+          result = { error: `Unknown tool: ${toolUse.name}` }
+        }
+
+        console.log('[chat] tool_result assets=', (result as any).total_found ?? '?')
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: toolUse.id,
+          content: JSON.stringify(result),
+        })
+      }
+
+      // Append assistant turn + tool results and continue loop
+      messages = [
+        ...messages,
+        { role: 'assistant', content: response.content },
+        { role: 'user', content: toolResults },
+      ]
+    }
+
+    await saveMessages(supabase, user.id, session_id, message, finalText)
+    return NextResponse.json({ message: finalText, session_id, _mode: 'claude' })
   } catch (err) {
     const errName = err instanceof Error ? err.constructor.name : 'UnknownError'
     const errMsg = err instanceof Error ? err.message : String(err)
     const errStatus = (err as any)?.status ?? null
-    console.error('[chat] Anthropic error:', { name: errName, message: errMsg, status: errStatus })
+    console.error('[chat] error:', { name: errName, message: errMsg, status: errStatus })
     return NextResponse.json({
-      message: 'Erro ao processar sua mensagem. Verifique se a ANTHROPIC_API_KEY está configurada corretamente no Vercel.',
+      message: 'Erro ao processar sua mensagem. Tente novamente em instantes.',
       session_id,
       _mode: 'error',
       _error: { name: errName, message: errMsg, status: errStatus },
