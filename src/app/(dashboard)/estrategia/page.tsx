@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -160,13 +160,31 @@ const initialAnswers: Answers = {
   risco: '',
 }
 
-type Step = 'intro' | 'categories' | 'goals' | 'generating' | 'result'
+type Step = 'loading' | 'intro' | 'categories' | 'goals' | 'generating' | 'result'
 
 export default function EstrategiaPage() {
-  const [step, setStep] = useState<Step>('intro')
+  const [step, setStep] = useState<Step>('loading')
   const [answers, setAnswers] = useState<Answers>(initialAnswers)
   const [strategy, setStrategy] = useState<Strategy | null>(null)
+  const [savedAt, setSavedAt] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Load saved strategy on mount
+  useEffect(() => {
+    fetch('/api/estrategia/save')
+      .then(r => r.json())
+      .then(data => {
+        if (data.saved) {
+          setStrategy(data.saved.strategy)
+          setAnswers(data.saved.answers ?? initialAnswers)
+          setSavedAt(data.saved.updated_at)
+          setStep('result')
+        } else {
+          setStep('intro')
+        }
+      })
+      .catch(() => setStep('intro'))
+  }, [])
 
   function setComfort(key: keyof Answers['categories'], val: ComfortLevel | '') {
     setAnswers(prev => ({ ...prev, categories: { ...prev.categories, [key]: val } }))
@@ -191,6 +209,13 @@ export default function EstrategiaPage() {
       } else {
         setStrategy(data.strategy)
         setStep('result')
+        setSavedAt(new Date().toISOString())
+        // Save in background
+        fetch('/api/estrategia/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answers, strategy: data.strategy, caseType: data.caseType }),
+        }).catch(console.error)
       }
     } catch {
       setError('Falha na conexão. Tente novamente.')
@@ -201,6 +226,7 @@ export default function EstrategiaPage() {
   function restart() {
     setAnswers(initialAnswers)
     setStrategy(null)
+    setSavedAt(null)
     setError(null)
     setStep('intro')
   }
@@ -219,7 +245,16 @@ export default function EstrategiaPage() {
       </div>
 
       {/* Progress bar */}
-      {step !== 'intro' && step !== 'result' && (
+      {step === 'loading' && (
+        <Card>
+          <CardContent className="py-16 text-center text-muted-foreground text-sm">
+            <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-3 text-primary" />
+            Carregando sua estratégia…
+          </CardContent>
+        </Card>
+      )}
+
+      {step !== 'intro' && step !== 'result' && step !== 'loading' && (
         <div className="flex items-center gap-2">
           {[0, 1, 2].map(i => {
             const stepIndex = step === 'categories' ? 0 : step === 'goals' ? 1 : 2
@@ -468,6 +503,22 @@ export default function EstrategiaPage() {
       {/* ── RESULT ── */}
       {step === 'result' && strategy && (
         <div className="space-y-5">
+          {/* Saved banner */}
+          {savedAt && (
+            <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+              <div className="flex items-center gap-2 text-sm text-emerald-800">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span>
+                  Estratégia salva · última atualização{' '}
+                  <strong>{new Date(savedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</strong>
+                </span>
+              </div>
+              <Button variant="outline" size="sm" onClick={restart} className="gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-100 shrink-0">
+                <RefreshCw className="h-3.5 w-3.5" /> Refazer quiz
+              </Button>
+            </div>
+          )}
+
           {/* Case badge + title */}
           <div className="space-y-3">
             {(() => {
@@ -678,7 +729,7 @@ export default function EstrategiaPage() {
           {/* Actions */}
           <div className="flex gap-3 flex-wrap">
             <Button onClick={restart} variant="outline" className="gap-2">
-              <RefreshCw className="h-4 w-4" /> Refazer questionário
+              <RefreshCw className="h-4 w-4" /> Refazer quiz
             </Button>
             <Button variant="outline" className="gap-2" onClick={() => setStep('goals')}>
               <ChevronLeft className="h-4 w-4" /> Ajustar respostas

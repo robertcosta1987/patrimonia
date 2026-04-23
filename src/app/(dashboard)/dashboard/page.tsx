@@ -18,7 +18,7 @@ async function getDashboardData(userId: string) {
   const [profileRes, alertsRes, macroRes, acoesRes, fiisRes] = await Promise.all([
     supabase.from('investor_profiles').select('*').eq('user_id', userId).single(),
     supabase.from('alert_events').select('*').eq('user_id', userId).eq('is_read', false).order('triggered_at', { ascending: false }).limit(5),
-    supabase.from('macro_indicators').select('*').order('name'),
+    supabase.from('macro_indicators').select('*').order('fetched_at', { ascending: false }),
     supabase.from('asset_metrics').select('*, assets(ticker,name,sector)').eq('assets.asset_class', 'acao').order('score', { ascending: false }).limit(5),
     supabase.from('asset_metrics').select('*, assets(ticker,name,segment)').eq('assets.asset_class', 'fii').order('score', { ascending: false }).limit(4),
   ])
@@ -67,9 +67,9 @@ export default async function DashboardPage() {
       {/* Macro Indicators */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
-          title="Selic Meta"
-          value={selic ? `${selic.value.toFixed(2)}%` : '—'}
-          subtitle="ao ano"
+          title="Selic"
+          value={selic ? `${parseFloat(selic.value).toFixed(2)}%` : '—'}
+          subtitle="taxa atual a.a."
           icon={Activity}
           highlight
         />
