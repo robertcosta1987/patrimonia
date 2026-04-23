@@ -5,10 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Disclaimer } from '@/components/common/disclaimer'
-import { Sparkles, RefreshCw, AlertTriangle, CheckCircle2, TrendingUp } from 'lucide-react'
+import { Sparkles, RefreshCw, AlertTriangle, CheckCircle2, TrendingUp, Save, ExternalLink } from 'lucide-react'
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
+import Link from 'next/link'
 
 interface PortfolioTicker {
   ticker: string
@@ -56,10 +57,15 @@ export default function CarteiraHipoteticaPage() {
   const [portfolio, setPortfolio] = useState<HypotheticalPortfolio | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [savedId, setSavedId] = useState<string | null>(null)
+  const [savedName, setSavedName] = useState<string | null>(null)
 
   async function generate() {
     setLoading(true)
     setError(null)
+    setSavedId(null)
+    setSavedName(null)
     try {
       const res = await fetch('/api/portfolio/hypothetical', { method: 'POST' })
       const data = await res.json()
@@ -69,6 +75,28 @@ export default function CarteiraHipoteticaPage() {
       setError('Falha na conexão. Tente novamente.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function savePortfolio() {
+    if (!portfolio) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/portfolio/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(portfolio),
+      })
+      const data = await res.json()
+      if (data.error) setError(data.error)
+      else {
+        setSavedId(data.id)
+        setSavedName(data.name)
+      }
+    } catch {
+      setError('Falha ao salvar carteira.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -84,7 +112,6 @@ export default function CarteiraHipoteticaPage() {
         </p>
       </div>
 
-      {/* Prominent disclaimer */}
       <div className="flex items-start gap-3 p-4 rounded-lg bg-amber-50 border border-amber-200">
         <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
         <div>
@@ -98,15 +125,34 @@ export default function CarteiraHipoteticaPage() {
         </div>
       </div>
 
-      {/* Generate button */}
-      <div className="flex justify-center">
+      <div className="flex justify-center gap-3">
         <Button onClick={generate} disabled={loading} size="lg" className="gap-2 min-w-[220px]">
           {loading
             ? <><RefreshCw className="h-4 w-4 animate-spin" /> Gerando carteira…</>
             : <><Sparkles className="h-4 w-4" /> {portfolio ? 'Gerar nova carteira' : 'Gerar Carteira com IA'}</>
           }
         </Button>
+        {portfolio && !savedId && (
+          <Button onClick={savePortfolio} disabled={saving} variant="outline" size="lg" className="gap-2">
+            {saving ? <><RefreshCw className="h-4 w-4 animate-spin" /> Salvando…</> : <><Save className="h-4 w-4" /> Salvar carteira</>}
+          </Button>
+        )}
       </div>
+
+      {savedId && (
+        <div className="flex items-center gap-3 p-4 rounded-lg bg-emerald-50 border border-emerald-200">
+          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-emerald-800">Carteira salva com sucesso!</p>
+            <p className="text-xs text-emerald-700">{savedName}</p>
+          </div>
+          <Link href={`/minhas-carteiras/${savedId}`}>
+            <Button variant="outline" size="sm" className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-100">
+              <ExternalLink className="h-3.5 w-3.5" /> Ver detalhes
+            </Button>
+          </Link>
+        </div>
+      )}
 
       {error && (
         <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200">
@@ -117,7 +163,6 @@ export default function CarteiraHipoteticaPage() {
 
       {portfolio && (
         <>
-          {/* Overview badges */}
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline" className="capitalize">{portfolio.profile}</Badge>
             <Badge variant="outline" className="text-emerald-700 border-emerald-300">
@@ -132,7 +177,6 @@ export default function CarteiraHipoteticaPage() {
             </Badge>
           </div>
 
-          {/* Chart + Reasoning */}
           <div className="grid lg:grid-cols-2 gap-4">
             <Card>
               <CardHeader>
@@ -179,7 +223,6 @@ export default function CarteiraHipoteticaPage() {
             </Card>
           </div>
 
-          {/* Tickers table */}
           <Card>
             <CardHeader>
               <CardTitle className="text-sm flex items-center gap-2">
@@ -220,7 +263,6 @@ export default function CarteiraHipoteticaPage() {
             </CardContent>
           </Card>
 
-          {/* Allocation bar breakdown */}
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">Distribuição por classe</CardTitle>
