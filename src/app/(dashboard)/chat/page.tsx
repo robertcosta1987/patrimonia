@@ -86,10 +86,12 @@ export default function ChatPage() {
       })
 
       const data = await res.json()
+      if (data._mode) console.log('[chat] mode:', data._mode, data._error ?? '')
       setMessages(prev => [...prev, { role: 'assistant', content: data.message }])
       if (data.session_id && !sessionId) setSessionId(data.session_id)
-    } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Desculpe, ocorreu um erro. Tente novamente.' }])
+    } catch (err) {
+      console.error('[chat] fetch error:', err)
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Falha na conexão. Verifique sua internet e tente novamente.' }])
     } finally {
       setLoading(false)
     }
