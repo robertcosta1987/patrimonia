@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, User, BarChart3, TrendingUp, Calculator,
   BookOpen, MessageSquare, Bell, LineChart, Settings, ChevronRight,
-  Briefcase, LogOut, ShieldCheck, Activity, Sparkles, SlidersHorizontal, FolderOpen
+  Briefcase, LogOut, ShieldCheck, Activity, Sparkles, SlidersHorizontal, FolderOpen, Target
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -26,6 +26,7 @@ const NAV_ITEMS = [
       { href: '/rankings', icon: BarChart3, label: 'Rankings' },
       { href: '/screener', icon: SlidersHorizontal, label: 'Screener B3' },
       { href: '/carteira', icon: Briefcase, label: 'Carteira-Modelo' },
+      { href: '/estrategia', icon: Target, label: 'Estratégia' },
       { href: '/carteira-hipotetica', icon: Sparkles, label: 'Carteira Hipotética' },
       { href: '/minhas-carteiras', icon: FolderOpen, label: 'Minhas Carteiras Geradas' },
       { href: '/estimativas', icon: LineChart, label: 'Estimativas' },
