@@ -13,6 +13,18 @@ function extractJSON(raw: string): string {
   return raw.trim()
 }
 
+// Build ordered month labels relative to a reference date
+function buildMonthLabels(referenceDate: Date, offsetMonths: number, count: number): string[] {
+  const PT_MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+  const labels: string[] = []
+  for (let i = 0; i < count; i++) {
+    const d = new Date(referenceDate)
+    d.setMonth(d.getMonth() + offsetMonths + i)
+    labels.push(`${PT_MONTHS[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`)
+  }
+  return labels
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -52,7 +64,6 @@ export async function POST(request: NextRequest) {
     sector: asset.sector,
     segment: asset.segment,
     current_price: latestPrice?.price ?? null,
-    price_change_pct: latestPrice?.change_pct ?? null,
     pl: metrics.pl ?? null,
     pvp: metrics.pvp ?? null,
     dividend_yield: metrics.dividend_yield ?? null,
@@ -64,48 +75,59 @@ export async function POST(request: NextRequest) {
     score: metrics.score ?? null,
   }
 
+  // Dynamic month labels
+  const now = new Date()
+  const pastLabels = buildMonthLabels(now, -12, 12)   // 12 months ago → last month
+  const futureLabels = buildMonthLabels(now, 1, 12)    // next month → 12 months ahead
+  const todayLabel = (() => {
+    const PT_MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+    return `${PT_MONTHS[now.getMonth()]}/${String(now.getFullYear()).slice(2)}`
+  })()
+
   const client = new Anthropic({ apiKey: key })
 
-  const prompt = `Você é um analista quantitativo especializado no mercado financeiro brasileiro. Data de referência: Abril de 2025.
+  const prompt = `Você é um analista quantitativo especializado no mercado financeiro brasileiro. Data atual: ${todayLabel} (Abril de 2026).
 
-Com base nos dados fundamentalistas abaixo do ativo ${asset.ticker}, gere uma projeção educativa para os próximos 12 meses.
+Analise o ativo ${asset.ticker} com os dados fundamentalistas abaixo e gere:
+1. Estimativa de preços históricos dos últimos 12 meses (baseada no seu conhecimento do ativo e nas métricas fornecidas)
+2. Projeção de preço para os próximos 12 meses (3 cenários)
 
 DADOS DO ATIVO:
-${JSON.stringify(assetData, null, 2)}
+${JSON.stringify(assetData)}
 
-Responda APENAS com um objeto JSON válido (sem markdown, sem texto adicional) no seguinte formato exato:
+Meses históricos (do mais antigo ao mais recente, terminando no mês passado):
+${pastLabels.join(', ')}
+
+Mês atual (ponto de hoje): ${todayLabel} — use current_price como valor exato aqui se disponível
+
+Meses futuros:
+${futureLabels.join(', ')}
+
+Responda SOMENTE com JSON válido (sem markdown):
 {
   "ticker": "${asset.ticker}",
   "name": "${asset.name}",
   "asset_class": "${asset.asset_class}",
   "currentPrice": número_ou_null,
-  "projectedMonths": [
-    {"month": "Mai/25", "pessimista": número, "base": número, "otimista": número},
-    {"month": "Jun/25", "pessimista": número, "base": número, "otimista": número},
-    {"month": "Jul/25", "pessimista": número, "base": número, "otimista": número},
-    {"month": "Ago/25", "pessimista": número, "base": número, "otimista": número},
-    {"month": "Set/25", "pessimista": número, "base": número, "otimista": número},
-    {"month": "Out/25", "pessimista": número, "base": número, "otimista": número},
-    {"month": "Nov/25", "pessimista": número, "base": número, "otimista": número},
-    {"month": "Dez/25", "pessimista": número, "base": número, "otimista": número},
-    {"month": "Jan/26", "pessimista": número, "base": número, "otimista": número},
-    {"month": "Fev/26", "pessimista": número, "base": número, "otimista": número},
-    {"month": "Mar/26", "pessimista": número, "base": número, "otimista": número},
-    {"month": "Abr/26", "pessimista": número, "base": número, "otimista": número}
+  "historicalMonths": [
+    ${pastLabels.map(m => `{"month":"${m}","price":número}`).join(',\n    ')}
   ],
-  "reasoning": "Análise fundamentalista em português (3-4 parágrafos) explicando a projeção com base nos dados disponíveis",
-  "keyFactors": ["fator positivo 1", "fator positivo 2", "fator positivo 3"],
-  "risks": ["risco 1", "risco 2", "risco 3"],
+  "futureMonths": [
+    ${futureLabels.map(m => `{"month":"${m}","pessimista":número,"base":número,"otimista":número}`).join(',\n    ')}
+  ],
+  "reasoning": "Análise fundamentalista em português (3-4 parágrafos)",
+  "keyFactors": ["fator 1","fator 2","fator 3"],
+  "risks": ["risco 1","risco 2","risco 3"],
   "expectedReturnBase": "ex: '+12% em 12 meses'",
   "qualityScore": número_de_0_a_100
 }
 
 REGRAS:
-- Se currentPrice for null, estime com base nas métricas (pvp * valor patrimonial implícito)
-- Use volatility para calibrar o spread entre cenários pessimista e otimista
-- O cenário base deve ser a projeção mais realista baseada nos fundamentos
-- Seja conservador e realista — não exagere retornos
-- Todos os preços devem ser números positivos`
+- historicalMonths: estime preços plausíveis para os últimos 12 meses com base no seu conhecimento do ativo e na volatilidade fornecida. O último mês histórico deve se conectar suavemente ao currentPrice de hoje.
+- futureMonths: pessimista < base < otimista. Todos partem do currentPrice de hoje.
+- Use volatility para calibrar spreads entre cenários
+- Seja realista e conservador — não exagere retornos
+- Todos os preços são números positivos em R$`
 
   const response = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
@@ -118,6 +140,10 @@ REGRAS:
   const extracted = extractJSON(text)
   try {
     const result = JSON.parse(extracted)
+    // Inject today bridge point so chart lines connect cleanly
+    const cp = result.currentPrice ?? assetData.current_price
+    result.todayLabel = todayLabel
+    result.todayPrice = cp
     return NextResponse.json(result)
   } catch {
     console.error('[ticker-estimate] JSON parse error, raw:', text.slice(0, 500))

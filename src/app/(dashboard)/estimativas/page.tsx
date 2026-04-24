@@ -10,8 +10,8 @@ import { Badge } from '@/components/ui/badge'
 import { Disclaimer } from '@/components/common/disclaimer'
 import { LineChart as LineChartIcon, TrendingUp, BarChart3, DollarSign, Percent, Search, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import {
-  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine, Legend,
+  AreaChart, Area, ComposedChart, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine, Legend, ReferenceArea,
 } from 'recharts'
 
 // ─── Patrimônio calculator ─────────────────────────────────────────
@@ -210,7 +210,10 @@ interface TickerEstimate {
   name: string
   asset_class: string
   currentPrice: number | null
-  projectedMonths: { month: string; pessimista: number; base: number; otimista: number }[]
+  todayLabel: string
+  todayPrice: number | null
+  historicalMonths: { month: string; price: number }[]
+  futureMonths: { month: string; pessimista: number; base: number; otimista: number }[]
   reasoning: string
   keyFactors: string[]
   risks: string[]
@@ -248,14 +251,34 @@ function TickerTab() {
     }
   }
 
+  // Build unified 25-point dataset: 12 past + today + 12 future
+  // Each point can have: actual (past), pessimista/base/otimista (future)
+  // Today's point has all four so lines connect visually
   const chartData = result
     ? [
-        ...(result.currentPrice
-          ? [{ month: 'Atual', pessimista: result.currentPrice, base: result.currentPrice, otimista: result.currentPrice }]
-          : []),
-        ...result.projectedMonths,
+        // Past 12 months — only "actual" field populated
+        ...(result.historicalMonths ?? []).map(m => ({ month: m.month, actual: m.price })),
+        // Today bridge — all lines meet at current price
+        {
+          month: result.todayLabel ?? 'Hoje',
+          actual: result.todayPrice ?? result.currentPrice,
+          pessimista: result.todayPrice ?? result.currentPrice,
+          base: result.todayPrice ?? result.currentPrice,
+          otimista: result.todayPrice ?? result.currentPrice,
+        },
+        // Future 12 months — pessimista/base/otimista only
+        ...(result.futureMonths ?? []).map(m => ({
+          month: m.month,
+          pessimista: m.pessimista,
+          base: m.base,
+          otimista: m.otimista,
+        })),
       ]
     : []
+
+  const todayIndex = result
+    ? (result.historicalMonths?.length ?? 0)
+    : 0
 
   return (
     <div className="space-y-6">
@@ -264,7 +287,7 @@ function TickerTab() {
         <CardHeader>
           <CardTitle className="text-base">Análise de ticker por IA</CardTitle>
           <CardDescription className="text-xs">
-            Selecione um ativo — a IA analisa os fundamentos e projeta os próximos 12 meses (3 cenários)
+            Selecione um ativo — a IA estima os últimos 12 meses históricos e projeta os próximos 12 meses (3 cenários)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -336,39 +359,181 @@ function TickerTab() {
           {/* Chart */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Projeção de preço — 12 meses (3 cenários)</CardTitle>
-              <CardDescription className="text-xs">
-                Estimativa educativa baseada em fundamentos. Não é garantia de resultado.
-              </CardDescription>
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <div>
+                  <CardTitle className="text-sm">Histórico + Projeção de preço — 24 meses</CardTitle>
+                  <CardDescription className="text-xs">
+                    12 meses históricos (estimados) · Hoje · 12 meses projetados (3 cenários)
+                  </CardDescription>
+                </div>
+                <div className="flex gap-3 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block h-0.5 w-5 bg-gray-500 rounded" /> Histórico
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block h-0.5 w-3 bg-red-400 rounded" /><span className="inline-block h-0.5 w-2 bg-blue-500 rounded" /><span className="inline-block h-0.5 w-3 bg-emerald-500 rounded" /> Cenários
+                  </span>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+              <ResponsiveContainer width="100%" height={340}>
+                <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="futureShade" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#f0f9ff" stopOpacity={0} />
+                      <stop offset="100%" stopColor="#f0f9ff" stopOpacity={0.6} />
+                    </linearGradient>
+                  </defs>
+
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.6} />
+
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 10 }}
+                    interval={1}
+                    angle={-35}
+                    textAnchor="end"
+                    height={44}
+                  />
                   <YAxis
                     tick={{ fontSize: 10 }}
-                    tickFormatter={v => `R$${v.toFixed(0)}`}
+                    tickFormatter={v => `R$${Number(v).toFixed(0)}`}
                     domain={['auto', 'auto']}
+                    width={56}
                   />
+
                   <Tooltip
-                    formatter={(val, name) => [`R$ ${Number(val).toFixed(2)}`, String(name)]}
-                    labelFormatter={l => String(l)}
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null
+                      const todayLbl = result?.todayLabel ?? 'Hoje'
+                      const isToday = label === todayLbl
+                      const isPast = chartData.findIndex(d => d.month === label) <= todayIndex
+                      return (
+                        <div className="bg-background border rounded-lg shadow-lg p-3 text-xs min-w-[140px]">
+                          <p className="font-semibold mb-1.5">{label}{isToday ? ' · Hoje' : isPast ? ' · Histórico' : ' · Projeção'}</p>
+                          {payload.map((p: any) => (
+                            <div key={p.dataKey} className="flex justify-between gap-3">
+                              <span style={{ color: p.color }}>{
+                                p.dataKey === 'actual' ? 'Preço real' :
+                                p.dataKey === 'base' ? 'Base' :
+                                p.dataKey === 'pessimista' ? 'Pessimista' : 'Otimista'
+                              }</span>
+                              <span className="font-mono font-medium">R$ {Number(p.value).toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    }}
                   />
-                  <Legend />
-                  {result.currentPrice && (
-                    <ReferenceLine
-                      y={result.currentPrice}
-                      stroke="hsl(var(--muted-foreground))"
-                      strokeDasharray="4 4"
-                      label={{ value: 'Preço atual', fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+
+                  <Legend
+                    formatter={(value) => (
+                      <span className="text-xs">
+                        {value === 'actual' ? 'Histórico (est.)' :
+                         value === 'base' ? 'Cenário Base' :
+                         value === 'pessimista' ? 'Pessimista' : 'Otimista'}
+                      </span>
+                    )}
+                  />
+
+                  {/* Shade future region */}
+                  {result?.todayLabel && (
+                    <ReferenceArea
+                      x1={result.todayLabel}
+                      fill="#eff6ff"
+                      fillOpacity={0.4}
                     />
                   )}
-                  <Line type="monotone" dataKey="pessimista" stroke="#ef4444" strokeWidth={2} dot={false} name="Pessimista" />
-                  <Line type="monotone" dataKey="base" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={false} name="Base" />
-                  <Line type="monotone" dataKey="otimista" stroke="#10b981" strokeWidth={2} dot={false} name="Otimista" />
-                </LineChart>
+
+                  {/* Today vertical line */}
+                  {result?.todayLabel && (
+                    <ReferenceLine
+                      x={result.todayLabel}
+                      stroke="hsl(var(--muted-foreground))"
+                      strokeWidth={1.5}
+                      strokeDasharray="5 3"
+                      label={{
+                        value: 'Hoje',
+                        position: 'insideTopRight',
+                        fontSize: 10,
+                        fill: 'hsl(var(--muted-foreground))',
+                        dy: -4,
+                      }}
+                    />
+                  )}
+
+                  {/* Historical actual price — solid dark line */}
+                  <Line
+                    type="monotone"
+                    dataKey="actual"
+                    stroke="#374151"
+                    strokeWidth={2.5}
+                    dot={false}
+                    connectNulls
+                    name="actual"
+                    activeDot={{ r: 4 }}
+                  />
+
+                  {/* Future scenarios — start at today, diverge forward */}
+                  <Line
+                    type="monotone"
+                    dataKey="pessimista"
+                    stroke="#ef4444"
+                    strokeWidth={1.75}
+                    strokeDasharray="5 3"
+                    dot={false}
+                    connectNulls
+                    name="pessimista"
+                    activeDot={{ r: 3 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="base"
+                    stroke="#3b82f6"
+                    strokeWidth={2.5}
+                    dot={false}
+                    connectNulls
+                    name="base"
+                    activeDot={{ r: 4 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="otimista"
+                    stroke="#10b981"
+                    strokeWidth={1.75}
+                    strokeDasharray="5 3"
+                    dot={false}
+                    connectNulls
+                    name="otimista"
+                    activeDot={{ r: 3 }}
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
+
+              {/* Price summary bar below chart */}
+              {result.futureMonths && result.futureMonths.length > 0 && result.todayPrice && (
+                <div className="mt-4 grid grid-cols-3 gap-3 border-t pt-4">
+                  {([
+                    { key: 'pessimista', label: 'Pessimista', color: 'text-red-600 bg-red-50 border-red-200' },
+                    { key: 'base', label: 'Base', color: 'text-blue-600 bg-blue-50 border-blue-200' },
+                    { key: 'otimista', label: 'Otimista', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
+                  ] as const).map(({ key, label, color }) => {
+                    const last = result.futureMonths[result.futureMonths.length - 1]
+                    const finalPrice = last[key]
+                    const pct = ((finalPrice - result.todayPrice!) / result.todayPrice! * 100)
+                    return (
+                      <div key={key} className={`rounded-lg border p-3 text-center ${color}`}>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70">{label}</p>
+                        <p className="font-bold text-base mt-0.5">R$ {finalPrice.toFixed(2)}</p>
+                        <p className="text-xs mt-0.5 font-medium">
+                          {pct >= 0 ? '+' : ''}{pct.toFixed(1)}% em 12 meses
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
 
